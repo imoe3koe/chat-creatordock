@@ -25,6 +25,7 @@ import { WordPressContent } from "@/modules/wordpress/components/wordpress-conte
 type PostPageProps = { params: Promise<{ slug: string }> };
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 function normalizeSlug(value: string): string {
   try {
@@ -59,7 +60,10 @@ export default async function BlogPostPage({ params }: PostPageProps) {
 
   if (!normalized) notFound();
 
-  const post = await getWordPressPost(normalized);
+  const [post, relatedPosts] = await Promise.all([
+    getWordPressPost(normalized),
+    getWordPressPosts(6),
+  ]);
 
   if (!post) notFound();
 
@@ -69,9 +73,7 @@ export default async function BlogPostPage({ params }: PostPageProps) {
   const author = getPostAuthor(post);
   const canonical = `${SITE_URL}/blog/${post.slug}`;
 
-  const related = (await getWordPressPosts(6)).filter(
-    (item) => item.slug !== post.slug,
-  );
+  const related = relatedPosts.filter((item) => item.slug !== post.slug);
 
   return (
     <div className="page-container py-6 sm:py-10 lg:py-14">

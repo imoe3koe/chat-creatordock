@@ -26,6 +26,7 @@ import { WordPressContent } from "@/modules/wordpress/components/wordpress-conte
 type PageProps = { params: Promise<{ slug: string }> };
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 function normalizeSlug(value: string): string {
   try {
@@ -89,7 +90,10 @@ export default async function WordPressPageRoute({ params }: PageProps) {
 
   if (!normalized) notFound();
 
-  const page = await getWordPressPage(normalized);
+  const [page, pageLinks] = await Promise.all([
+    getWordPressPage(normalized),
+    getWordPressPageLinks(),
+  ]);
   const fallback = page ? null : getFallbackPage(normalized);
 
   if (!page && !fallback) notFound();
@@ -100,9 +104,7 @@ export default async function WordPressPageRoute({ params }: PageProps) {
   const updated = page ? page.modified || page.date : fallback!.updatedAt;
   const image = page ? getFeaturedImage(page) : null;
   const externalUrl = page?.link;
-  const relatedPages = (await getWordPressPageLinks()).filter(
-    (item) => item.slug !== normalized,
-  );
+  const relatedPages = pageLinks.filter((item) => item.slug !== normalized);
 
   const canonical = `${SITE_URL}/p/${normalized}`;
 

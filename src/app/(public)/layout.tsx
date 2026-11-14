@@ -3,6 +3,7 @@ import { PublicHeader } from "@/modules/wordpress/components/public-header";
 import { PublicFooter } from "@/modules/wordpress/components/public-footer";
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 export default async function PublicLayout({
   children,

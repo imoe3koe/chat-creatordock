@@ -42,18 +42,23 @@ export function buildWordPressUrl(
   const endpointPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const parsed = new URL(base);
   const path = parsed.pathname.replace(/\/$/, "");
+  const usesPrettyRest = path.endsWith(PRETTY_REST_SUFFIX);
 
-  const url = path.endsWith(PRETTY_REST_SUFFIX)
-    ? new URL(parsed.origin)
-    : new URL(`${base}${endpointPath}`);
-
-  if (path.endsWith(PRETTY_REST_SUFFIX)) {
-    url.searchParams.set("rest_route", `/wp/v2${endpointPath}`);
+  const query = new URLSearchParams();
+  if (usesPrettyRest) {
+    query.set("rest_route", `/wp/v2${endpointPath}`);
   }
-
   Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value);
+    if (value) query.set(key, value);
   });
+
+  // WordPress/LiteSpeed only matches the rest_route when the slashes are
+  // literal; URLSearchParams percent-encodes them as %2F and the request then
+  // 404s on some hosts.
+  const search = query.toString().replace(/%2F/gi, "/");
+  const url = usesPrettyRest
+    ? new URL(`${parsed.origin}/?${search}`)
+    : new URL(`${base}${endpointPath}${search ? `?${search}` : ""}`);
 
   return url;
 }
@@ -88,7 +93,7 @@ async function wpFetch<T>(
     response = await fetch(url.toString(), {
       headers,
       next: { revalidate: REVALIDATE_SECONDS, tags: ["wordpress"] },
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     throw new WordPressError("Tidak dapat terhubung ke WordPress.");
@@ -150,12 +155,66 @@ export async function getWordPressPage(slug: string): Promise<WPPage | null> {
 
 export async function getWordPressPosts(limit = 12): Promise<WPPost[]> {
   try {
+    const perPage = String(Math.min(Math.max(limit, 1), 50));
     const posts = await wpFetch<WPPost[]>("/posts", {
-      per_page: String(Math.min(Math.max(limit, 1), 50)),
+      per_page: perPage,
       status: "publish",
-      _embed: "wp:featuredmedia,author",
+      _fields: [
+        "id",
+        "slug",
+        "date",
+        "modified",
+        "link",
+        "title",
+        "excerpt",
+        "featured_media",
+      ].join(","),
     });
-    return posts.filter((post) => post?.slug && post?.title);
+
+    const filtered = posts.filter((post) => post?.slug && post?.title);
+    if (filtered.length === 0) return [];
+
+    // The index only needs cover images. Fetching them in one batch is much
+    // lighter than `_embed`, which downloads every post's full content and
+    // regularly exceeds the runtime budget on slow shared hosts.
+    const mediaIds = Array.from(
+      new Set(
+        filtered
+          .map((post) => post.featured_media)
+          .filter((id): id is number => typeof id === "number" && id > 0),
+      ),
+    );
+
+    if (mediaIds.length === 0) return filtered;
+
+    const media = await wpFetch<Array<{ id: number; source_url?: string }>>(
+      "/media",
+      {
+        include: mediaIds.join(","),
+        per_page: "100",
+        _fields: "id,source_url",
+      },
+    );
+
+    const sourceById = new Map(
+      media.map((item) => [item.id, item.source_url]),
+    );
+
+    return filtered.map((post) => {
+      const sourceUrl = post.featured_media
+        ? sourceById.get(post.featured_media)
+        : undefined;
+
+      if (!sourceUrl) return post;
+
+      return {
+        ...post,
+        _embedded: {
+          ...post._embedded,
+          "wp:featuredmedia": [{ source_url: sourceUrl }],
+        },
+      };
+    });
   } catch (error) {
     console.error("[wordpress] getWordPressPosts:", error);
     return [];
