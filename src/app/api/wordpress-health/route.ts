@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import { NextResponse } from "next/server";
 import { buildWordPressUrl, getWordPressApiUrl } from "@/lib/wordpress/client";
 
@@ -9,38 +10,52 @@ type ProbeResult = {
   status: number | null;
   latencyMs: number;
   contentType: string | null;
+  server: string | null;
+  title?: string | null;
   error?: string;
   preview?: string;
 };
 
 const PREVIEW_LIMIT = 160;
-
 const POST_PARAMS = {
   per_page: "1",
   status: "publish",
   _fields: "id,slug",
 };
 
+function queryString(params: Record<string, string>): string {
+  return new URLSearchParams(params).toString();
+}
+
 function buildProbes(): Array<{ name: string; url: string }> {
   const apiUrl = getWordPressApiUrl();
-  const siteUrl = new URL(apiUrl).origin;
+  const origin = new URL(apiUrl).origin;
+  const params = queryString(POST_PARAMS);
 
   return [
     {
-      name: "posts_rest_route",
+      name: "pretty_posts",
+      url: `${apiUrl}/posts?${params}`,
+    },
+    {
+      name: "rest_literal",
+      url: `${origin}/?rest_route=/wp/v2/posts&${params}`,
+    },
+    {
+      name: "rest_encoded",
       url: buildWordPressUrl("/posts", POST_PARAMS).toString(),
     },
     {
-      name: "pages_rest_route",
-      url: buildWordPressUrl("/pages", POST_PARAMS).toString(),
-    },
-    {
-      name: "posts_pretty",
-      url: `${apiUrl}/posts?per_page=1&status=publish&_fields=id,slug`,
+      name: "index_php_literal",
+      url: `${origin}/index.php?rest_route=/wp/v2/posts&${params}`,
     },
     {
       name: "wp_json_root",
-      url: `${siteUrl}/wp-json/`,
+      url: `${origin}/wp-json/`,
+    },
+    {
+      name: "homepage",
+      url: `${origin}/`,
     },
   ];
 }
@@ -59,19 +74,25 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
       signal: AbortSignal.timeout(8000),
     });
 
+    const contentType = response.headers.get("content-type");
+    const server = response.headers.get("server");
+    let title: string | null = null;
     let preview: string | undefined;
+
+    const body = await response.text();
+    const titleMatch = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    if (titleMatch) title = titleMatch[1].replace(/\s+/g, " ").trim().slice(0, 120);
     if (!response.ok) {
-      const text = await response.text();
-      preview = text.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LIMIT);
-    } else {
-      await response.body?.cancel();
+      preview = body.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LIMIT);
     }
 
     return {
       name: probe.name,
       status: response.status,
       latencyMs: Date.now() - started,
-      contentType: response.headers.get("content-type"),
+      contentType,
+      server,
+      title,
       preview,
     };
   } catch (error) {
@@ -80,6 +101,7 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
       status: null,
       latencyMs: Date.now() - started,
       contentType: null,
+      server: null,
       error:
         error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
     };
@@ -87,22 +109,33 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
 }
 
 /**
- * Lightweight reachability probe for the headless WordPress REST API.
+ * Reachability + routing diagnostics for the headless WordPress REST API.
  *
- * Blog pages and the WP page fallbacks depend on outbound access from the
- * hosting runtime, which can fail because of firewalls, rate limits, or a
- * misconfigured URL. This endpoint reports only status/latency plus a short
- * preview of error responses so it is safe to expose for uptime monitoring.
+ * Reports status codes, response metadata, and a short preview of error
+ * bodies only. No credentials or private content are exposed.
  */
 export async function GET() {
   const probes = buildProbes();
-  const results = await Promise.all(probes.map(runProbe));
-  const ok = results.find((result) => result.name === "posts_rest_route")?.status === 200;
+
+  const [results, dns] = await Promise.all([
+    Promise.all(probes.map(runProbe)),
+    lookup("creatordock.online", { all: true }).catch((error: unknown) => [
+      {
+        address: `error: ${error instanceof Error ? error.message : "unknown"}`,
+        family: 0,
+      },
+    ]),
+  ]);
+
+  const ok =
+    results.find((result) => result.name === "rest_encoded")?.status === 200 ||
+    results.find((result) => result.name === "rest_literal")?.status === 200;
 
   return NextResponse.json(
     {
       ok,
       host: new URL(probes[0].url).hostname,
+      dns,
       results,
     },
     {
