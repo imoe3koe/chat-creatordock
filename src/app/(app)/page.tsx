@@ -14,11 +14,13 @@ export const metadata: Metadata = {
 
 function greeting(): string {
   const hour = new Date().getHours();
-  if (hour < 11) return "Selamat pagi";
+
+  if (hour < 12) return "Selamat pagi";
   if (hour < 15) return "Selamat siang";
-  if (hour < 19) return "Selamat sore";
+  if (hour < 17) return "Selamat sore";
   return "Selamat malam";
 }
+
 
 export default async function HomePage() {
   const user = await getCurrentUser();
