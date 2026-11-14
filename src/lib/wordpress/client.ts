@@ -23,6 +23,41 @@ export function getWordPressSiteUrl(): string {
   );
 }
 
+const PRETTY_REST_SUFFIX = "/wp-json/wp/v2";
+
+/**
+ * Build a request URL for the WordPress REST API.
+ *
+ * Some shared hosts (observed on DomaiNesia/LiteSpeed) serve
+ * `/wp-json/wp/v2/*` as a 404 to datacenter IPs while the core
+ * `?rest_route=/wp/v2/*` form keeps working. Both forms are supported by
+ * WordPress core, so we prefer `rest_route` whenever the configured base is
+ * the standard pretty REST path. Custom API bases are used verbatim.
+ */
+export function buildWordPressUrl(
+  endpoint: string,
+  params: Record<string, string> = {},
+): URL {
+  const base = getWordPressApiUrl();
+  const endpointPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const parsed = new URL(base);
+  const path = parsed.pathname.replace(/\/$/, "");
+
+  const url = path.endsWith(PRETTY_REST_SUFFIX)
+    ? new URL(parsed.origin)
+    : new URL(`${base}${endpointPath}`);
+
+  if (path.endsWith(PRETTY_REST_SUFFIX)) {
+    url.searchParams.set("rest_route", `/wp/v2${endpointPath}`);
+  }
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+
+  return url;
+}
+
 class WordPressError extends Error {
   constructor(
     message: string,
@@ -37,10 +72,7 @@ async function wpFetch<T>(
   endpoint: string,
   params: Record<string, string> = {},
 ): Promise<T> {
-  const url = new URL(`${getWordPressApiUrl()}${endpoint}`);
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value);
-  });
+  const url = buildWordPressUrl(endpoint, params);
 
   const headers: HeadersInit = {
     Accept: "application/json",

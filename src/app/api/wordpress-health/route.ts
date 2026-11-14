@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
-import { getWordPressApiUrl } from "@/lib/wordpress/client";
+import { buildWordPressUrl, getWordPressApiUrl } from "@/lib/wordpress/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Probe = {
-  name: string;
-  url: string;
-};
 
 type ProbeResult = {
   name: string;
@@ -20,22 +15,28 @@ type ProbeResult = {
 
 const PREVIEW_LIMIT = 160;
 
-function buildProbes(): Probe[] {
+const POST_PARAMS = {
+  per_page: "1",
+  status: "publish",
+  _fields: "id,slug",
+};
+
+function buildProbes(): Array<{ name: string; url: string }> {
   const apiUrl = getWordPressApiUrl();
   const siteUrl = new URL(apiUrl).origin;
 
   return [
     {
-      name: "posts",
+      name: "posts_rest_route",
+      url: buildWordPressUrl("/posts", POST_PARAMS).toString(),
+    },
+    {
+      name: "pages_rest_route",
+      url: buildWordPressUrl("/pages", POST_PARAMS).toString(),
+    },
+    {
+      name: "posts_pretty",
       url: `${apiUrl}/posts?per_page=1&status=publish&_fields=id,slug`,
-    },
-    {
-      name: "pages",
-      url: `${apiUrl}/pages?per_page=1&status=publish&_fields=id,slug`,
-    },
-    {
-      name: "rest_route",
-      url: `${siteUrl}/?rest_route=/wp/v2/posts&per_page=1&status=publish&_fields=id,slug`,
     },
     {
       name: "wp_json_root",
@@ -44,7 +45,7 @@ function buildProbes(): Probe[] {
   ];
 }
 
-async function runProbe(probe: Probe): Promise<ProbeResult> {
+async function runProbe(probe: { name: string; url: string }): Promise<ProbeResult> {
   const started = Date.now();
 
   try {
@@ -96,7 +97,7 @@ async function runProbe(probe: Probe): Promise<ProbeResult> {
 export async function GET() {
   const probes = buildProbes();
   const results = await Promise.all(probes.map(runProbe));
-  const ok = results.find((result) => result.name === "posts")?.status === 200;
+  const ok = results.find((result) => result.name === "posts_rest_route")?.status === 200;
 
   return NextResponse.json(
     {
