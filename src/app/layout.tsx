@@ -31,22 +31,35 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/logo-chatcreator-01.png", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/logo-chatcreator-01.png", type: "image/png" }],
   },
   openGraph: {
     type: "website",
     locale: "id_ID",
+    url: SITE_URL,
     siteName: "CreatorChat",
     title: "CreatorChat — Ruang Kreator",
     description:
       "Berbagi karya, berdiskusi, menyimpan artikel, dan mempromosikan karyamu — dalam satu ruang.",
+    images: [
+      {
+        url: "/icons/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "CreatorChat — Ruang Kreator",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "CreatorChat — Ruang Kreator",
     description:
       "Berbagi karya, berdiskusi, menyimpan artikel, dan mempromosikan karyamu.",
+    images: ["/icons/og-image.png"],
   },
   robots: {
     index: true,
