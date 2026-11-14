@@ -8,6 +8,7 @@ export const maxDuration = 30;
 
 type ProbeResult = {
   name: string;
+  url: string;
   status: number | null;
   latencyMs: number;
   contentType: string | null;
@@ -89,6 +90,7 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
 
     return {
       name: probe.name,
+      url: probe.url,
       status: response.status,
       latencyMs: Date.now() - started,
       contentType,
@@ -99,6 +101,7 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
   } catch (error) {
     return {
       name: probe.name,
+      url: probe.url,
       status: null,
       latencyMs: Date.now() - started,
       contentType: null,
@@ -117,10 +120,11 @@ async function runProbe(probe: { name: string; url: string }): Promise<ProbeResu
  */
 export async function GET() {
   const probes = buildProbes();
+  const host = new URL(getWordPressApiUrl()).hostname;
 
   const [results, dns] = await Promise.all([
     Promise.all(probes.map(runProbe)),
-    lookup("creatordock.online", { all: true }).catch((error: unknown) => [
+    lookup(host, { all: true }).catch((error: unknown) => [
       {
         address: `error: ${error instanceof Error ? error.message : "unknown"}`,
         family: 0,
@@ -135,7 +139,8 @@ export async function GET() {
   return NextResponse.json(
     {
       ok,
-      host: new URL(probes[0].url).hostname,
+      host,
+      apiBase: getWordPressApiUrl(),
       dns,
       results,
     },

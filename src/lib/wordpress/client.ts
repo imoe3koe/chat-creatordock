@@ -23,7 +23,36 @@ export function getWordPressSiteUrl(): string {
   );
 }
 
-const PRETTY_REST_SUFFIX = "/wp-json/wp/v2";
+const WP_JSON_SEGMENT = "/wp-json";
+
+/**
+ * Resolve the WordPress `rest_route` prefix from the configured API base.
+ *
+ * Accepts every common shape so a slightly different dashboard value cannot
+ * break the app:
+ *   - https://example.com/wp-json/wp/v2   -> /wp/v2
+ *   - https://example.com/wp-json         -> /wp/v2 (WordPress default)
+ *   - https://example.com/wp-json/wp/v2/  -> /wp/v2
+ *   - https://example.com/?rest_route=/wp/v2 -> /wp/v2
+ * Returns null for non-WordPress/custom endpoints, which are used verbatim.
+ */
+function getRestRoutePrefix(parsed: URL): string | null {
+  const existingRoute = parsed.searchParams.get("rest_route");
+  if (existingRoute) return existingRoute.replace(/\/$/, "");
+
+  const path = parsed.pathname.replace(/\/$/, "");
+  if (!path) return "/wp/v2";
+
+  const wpJsonIndex = path.indexOf(WP_JSON_SEGMENT);
+  if (wpJsonIndex === -1) return null;
+
+  const suffix = path
+    .slice(wpJsonIndex + WP_JSON_SEGMENT.length)
+    .replace(/\/$/, "");
+
+  if (!suffix) return "/wp/v2";
+  return suffix.startsWith("/") ? suffix : `/${suffix}`;
+}
 
 /**
  * Build a request URL for the WordPress REST API.
@@ -31,8 +60,8 @@ const PRETTY_REST_SUFFIX = "/wp-json/wp/v2";
  * Some shared hosts (observed on DomaiNesia/LiteSpeed) serve
  * `/wp-json/wp/v2/*` as a 404 to datacenter IPs while the core
  * `?rest_route=/wp/v2/*` form keeps working. Both forms are supported by
- * WordPress core, so we prefer `rest_route` whenever the configured base is
- * the standard pretty REST path. Custom API bases are used verbatim.
+ * WordPress core, so we always use `rest_route` when the base points at a
+ * WordPress REST endpoint. Non-WordPress bases are used verbatim.
  */
 export function buildWordPressUrl(
   endpoint: string,
@@ -41,12 +70,11 @@ export function buildWordPressUrl(
   const base = getWordPressApiUrl();
   const endpointPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const parsed = new URL(base);
-  const path = parsed.pathname.replace(/\/$/, "");
-  const usesPrettyRest = path.endsWith(PRETTY_REST_SUFFIX);
+  const routePrefix = getRestRoutePrefix(parsed);
 
   const query = new URLSearchParams();
-  if (usesPrettyRest) {
-    query.set("rest_route", `/wp/v2${endpointPath}`);
+  if (routePrefix) {
+    query.set("rest_route", `${routePrefix}${endpointPath}`);
   }
   Object.entries(params).forEach(([key, value]) => {
     if (value) query.set(key, value);
@@ -56,11 +84,12 @@ export function buildWordPressUrl(
   // literal; URLSearchParams percent-encodes them as %2F and the request then
   // 404s on some hosts.
   const search = query.toString().replace(/%2F/gi, "/");
-  const url = usesPrettyRest
-    ? new URL(`${parsed.origin}/?${search}`)
-    : new URL(`${base}${endpointPath}${search ? `?${search}` : ""}`);
 
-  return url;
+  return new URL(
+    routePrefix
+      ? `${parsed.origin}/?${search}`
+      : `${base}${endpointPath}${search ? `?${search}` : ""}`,
+  );
 }
 
 class WordPressError extends Error {
