@@ -1,4 +1,4 @@
-import { sanitizeRichHtml } from "@/lib/security/sanitize";
+import { sanitizeRichHtml } from "@/lib/security/rich-html";
 import { cn } from "@/lib/utils";
 
 /**

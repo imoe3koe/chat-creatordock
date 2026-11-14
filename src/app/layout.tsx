@@ -2,11 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "@/app/globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { SITE_URL } from "@/lib/constants";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-  ),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "CreatorChat — Ruang Kreator",
     template: "%s · CreatorChat",

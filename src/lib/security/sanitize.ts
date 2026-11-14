@@ -1,10 +1,41 @@
-import DOMPurify from "isomorphic-dompurify";
-
 /**
  * User-authored text is stored as plain text and rendered through React
  * (which escapes automatically). These helpers additionally strip HTML and
  * control characters before text reaches the database or an attribute.
+ *
+ * Deliberately dependency-free: DOMPurify/jsdom must not be imported into
+ * server bundles because jsdom's ESM dependency chain crashes on Vercel's
+ * runtime. Rich CMS HTML is sanitised separately in `rich-html.ts`.
  */
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&#x0*27;/gi, "'")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    })
+    .replace(/&#(\d+);/g, (_, decimal: string) => {
+      const code = Number.parseInt(decimal, 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    })
+    .replace(/&amp;/gi, "&");
+}
+
+function stripHtml(input: string): string {
+  return input
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<[^>]*>/g, " ");
+}
+
 export function sanitizePlainText(
   input: string,
   maxLength = 5000,
@@ -18,11 +49,7 @@ export function sanitizePlainText(
     .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "");
 
-  const withoutTags = DOMPurify.sanitize(withoutControl, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
-  });
+  const withoutTags = decodeEntities(stripHtml(withoutControl));
 
   const normalized = options.preserveNewlines
     ? withoutTags.replace(/\r\n/g, "\n").replace(/\n{4,}/g, "\n\n\n").trim()
@@ -87,87 +114,6 @@ export function sanitizeFileName(input: string): string {
     .replace(/\.{2,}/g, ".")
     .slice(0, 120);
   return cleaned || "file";
-}
-
-const ALLOWED_RICH_TAGS = [
-  "p",
-  "br",
-  "strong",
-  "b",
-  "em",
-  "i",
-  "u",
-  "s",
-  "ul",
-  "ol",
-  "li",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "blockquote",
-  "a",
-  "img",
-  "figure",
-  "figcaption",
-  "table",
-  "thead",
-  "tbody",
-  "tr",
-  "th",
-  "td",
-  "hr",
-  "code",
-  "pre",
-  "span",
-  "div",
-  "video",
-  "source",
-];
-
-const ALLOWED_RICH_ATTR = [
-  "href",
-  "src",
-  "alt",
-  "title",
-  "target",
-  "rel",
-  "width",
-  "height",
-  "loading",
-  "class",
-  "controls",
-  "poster",
-  "type",
-  "colspan",
-  "rowspan",
-];
-
-/** Sanitise trusted-ish CMS HTML before rendering it with dangerouslySetInnerHTML. */
-export function sanitizeRichHtml(html: string): string {
-  if (!html) return "";
-
-  const clean = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ALLOWED_RICH_TAGS,
-    ALLOWED_ATTR: ALLOWED_RICH_ATTR,
-    ALLOW_DATA_ATTR: false,
-    FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "form"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "style"],
-    ADD_ATTR: ["target", "rel"],
-  });
-
-  // Force every external link to be safe and avoid tab-nabbing.
-  return clean.replace(
-    /<a\s+([^>]*?)>/gi,
-    (_match, attrs: string) => {
-      const cleanedAttrs = attrs
-        .replace(/\s+target=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-        .replace(/\s+rel=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-      return `<a ${cleanedAttrs} target="_blank" rel="noopener noreferrer nofollow">`;
-    },
-  );
 }
 
 export function extractMentions(text: string): string[] {
