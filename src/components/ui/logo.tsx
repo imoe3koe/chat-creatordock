@@ -24,7 +24,7 @@ export function Logo({
       */}
       <div className="relative size-9 overflow-hidden rounded-xl shadow-[0_4px_20px_rgba(255,107,0,0.15)]">
         <Image
-          src="/logo-chatcreator-01.png" // Simpan file logo Anda di folder /public/logo.png
+          src="public/icons/logo-chatcreator-01.png" // Simpan file logo Anda di folder /public/logo.png
           alt="logo-chatcreator"
           fill
           className="object-contain" // Memastikan gambar proporsional
