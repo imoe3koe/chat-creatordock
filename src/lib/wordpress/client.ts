@@ -6,9 +6,14 @@ const DEFAULT_API_URL = "https://creatordock.online/wp-json/wp/v2";
 const REVALIDATE_SECONDS = 300;
 
 export function getWordPressApiUrl(): string {
-  return (
-    process.env.WORDPRESS_API_URL?.replace(/\/$/, "") || DEFAULT_API_URL
-  );
+  const configured =
+    process.env.WORDPRESS_API_URL || process.env.NEXT_PUBLIC_WP_API_URL;
+  if (configured) return configured.replace(/\/$/, "");
+
+  const siteUrl = process.env.NEXT_PUBLIC_WORDPRESS_SITE_URL;
+  if (siteUrl) return `${siteUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
+
+  return DEFAULT_API_URL;
 }
 
 export function getWordPressSiteUrl(): string {

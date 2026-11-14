@@ -10,11 +10,20 @@ const supabaseHost = (() => {
   }
 })();
 
+const wordpressApiUrl = (() => {
+  const configured =
+    process.env.WORDPRESS_API_URL || process.env.NEXT_PUBLIC_WP_API_URL;
+  if (configured) return configured;
+
+  const siteUrl = process.env.NEXT_PUBLIC_WORDPRESS_SITE_URL;
+  if (siteUrl) return `${siteUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
+
+  return "https://creatordock.online/wp-json/wp/v2";
+})();
+
 const wordpressHost = (() => {
   try {
-    return process.env.WORDPRESS_API_URL
-      ? new URL(process.env.WORDPRESS_API_URL).hostname
-      : "creatordock.online";
+    return new URL(wordpressApiUrl).hostname;
   } catch {
     return "creatordock.online";
   }
