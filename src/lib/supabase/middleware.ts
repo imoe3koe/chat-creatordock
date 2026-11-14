@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   "/blog",
   "/offline",
   "/sw.js",
+  "/api/wordpress-health",
 ];
 
 const AUTH_ENTRY_PATHS = ["/login", "/register"];
