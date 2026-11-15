@@ -44,7 +44,7 @@ untuk halaman serta artikel publik.
 | UI         | Tailwind CSS 3.4, Lucide Icons                         |
 | Auth & DB  | Supabase (`@supabase/ssr`, Postgres, Storage, Realtime) |
 | CMS        | WordPress REST API (`/wp-json/wp/v2`)                  |
-| Sanitasi   | `isomorphic-dompurify` + utilitas khusus               |
+| Sanitasi   | `sanitize-html` + utilitas khusus                       |
 | Deployment | Vercel                                                 |
 
 ---
@@ -111,10 +111,11 @@ Salin `.env.example` menjadi `.env.local` (lokal) atau isi di dashboard Vercel.
 | `NEXT_PUBLIC_SUPABASE_URL`        |  Ya   | URL proyek Supabase, mis. `https://xxxx.supabase.co`.          |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`   |  Ya   | Anon/public key Supabase.                                       |
 | `SUPABASE_SERVICE_ROLE_KEY`       |  -    | Hanya untuk job server tepercaya. Jangan pernah ke browser.    |
-| `WORDPRESS_API_URL`               |  -    | Default: `https://creatordock.online/wp-json/wp/v2`.           |
+| `WORDPRESS_API_URL`               |  -    | Default: `https://creatordock.online/wp-json/wp/v2`. Boleh juga diisi origin (`https://creatordock.online`); aplikasi otomatis memakai `?rest_route=`. |
+| `NEXT_PUBLIC_WP_API_URL`          |  -    | Alias publik untuk `WORDPRESS_API_URL`.                        |
 | `NEXT_PUBLIC_WORDPRESS_SITE_URL`  |  -    | Default: `https://creatordock.online`.                         |
 | `WORDPRESS_API_TOKEN`             |  -    | Hanya jika REST API WordPress dilindungi.                       |
-| `NEXT_PUBLIC_SITE_URL`            |  Ya   | URL publik aplikasi, dipakai untuk canonical, sitemap, OG.     |
+| `NEXT_PUBLIC_SITE_URL`            |  Ya   | URL publik aplikasi, mis. `https://chat.creatordock.online`.   |
 | `NEXT_PUBLIC_APP_NAME`            |  -    | Nama tampilan aplikasi.                                         |
 
 Tanpa kredensial Supabase, aplikasi tetap bisa melakukan build dan menampilkan
@@ -136,9 +137,11 @@ halaman publik WordPress. Rute privat akan mengarahkan ke `/login`.
    - bucket `avatars`, `feed-media`, dan `promo-media` beserta policy-nya;
    - publikasi realtime untuk tabel feed dan diskusi.
 3. Di **Authentication → URL Configuration**, atur:
-   - **Site URL**: `https://creatordock.online`
-   - **Redirect URLs**: `https://creatordock.online/auth/callback`,
-     `http://localhost:3000/auth/callback`
+   - **Site URL**: `https://chat.creatordock.online`
+   - **Redirect URLs**:
+     - `https://chat.creatordock.online/auth/callback`
+     - `https://chat-creatordock.vercel.app/auth/callback`
+     - `http://localhost:3000/auth/callback`
 4. Aktifkan penyedia **Email**. Untuk pengalaman OTP, sunting template email
    agar menampilkan `{{ .Token }}` (lihat contoh di bawah).
 5. Salin **Project URL** dan **anon key** ke variabel lingkungan.
@@ -183,15 +186,18 @@ kode.</p>
 
 1. Hubungkan repositori ke Vercel.
 2. Tambahkan semua variabel lingkungan produksi. Pastikan
-   `NEXT_PUBLIC_SITE_URL=https://creatordock.online`.
+   `NEXT_PUBLIC_SITE_URL=https://chat.creatordock.online` dan
+   `NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co`.
 3. Deploy. Vercel mendeteksi Next.js secara otomatis; tidak perlu
    `vercel.json`.
-4. Arahkan domain `creatordock.online` ke proyek Vercel dan aktifkan HTTPS.
+4. Hubungkan domain `chat.creatordock.online` ke proyek Vercel
+   (CNAME `cname.vercel-dns.com`) dan aktifkan HTTPS.
 5. Setelah deploy, verifikasi:
-   - `https://creatordock.online/robots.txt`
-   - `https://creatordock.online/sitemap.xml`
-   - `https://creatordock.online/blog`
-   - `https://creatordock.online/p/tentang-kami`
+   - `https://chat.creatordock.online/robots.txt`
+   - `https://chat.creatordock.online/sitemap.xml`
+   - `https://chat.creatordock.online/blog`
+   - `https://chat.creatordock.online/p/tentang-kami`
+   - `https://chat.creatordock.online/api/wordpress-health` (diagnostik)
    - header keamanan melalui `curl -I`.
 
 Security headers, CSP, dan cache service worker diatur di `next.config.mjs`.
