@@ -37,7 +37,7 @@ function buildProbes(): Array<{ name: string; url: string }> {
   return [
     {
       name: "pretty_posts",
-      url: `${apiUrl}/posts?${params}`,
+      url: `${origin}/wp-json/wp/v2/posts?${params}`,
     },
     {
       name: "rest_literal",
