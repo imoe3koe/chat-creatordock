@@ -318,8 +318,8 @@ export function getPageTitle(page: WPPage): string {
 
 export function getPageExcerpt(page: WPPage, max = 165): string {
   const description =
-    page.yoast_head_json?.description ||
-    page.yoast_head_json?.og_description ||
+    stripHtmlTags(page.yoast_head_json?.description ?? "") ||
+    stripHtmlTags(page.yoast_head_json?.og_description ?? "") ||
     stripHtmlTags(page.excerpt?.rendered ?? "") ||
     stripHtmlTags(page.content?.rendered ?? "");
   return description.length > max
@@ -328,7 +328,7 @@ export function getPageExcerpt(page: WPPage, max = 165): string {
 }
 
 export function getPostAuthor(post: WPPost): string {
-  return post._embedded?.author?.[0]?.name || "Creatordock";
+  return stripHtmlTags(post._embedded?.author?.[0]?.name ?? "") || "Creatordock";
 }
 
 export { WordPressError };

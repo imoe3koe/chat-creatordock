@@ -68,8 +68,102 @@ export function truncate(value: string, max = 160): string {
   return `${value.slice(0, max).trimEnd()}…`;
 }
 
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  bull: "•",
+  cent: "¢",
+  copy: "©",
+  dagger: "†",
+  Dagger: "‡",
+  deg: "°",
+  divide: "÷",
+  emsp: " ",
+  ensp: " ",
+  euro: "€",
+  frac12: "½",
+  frac14: "¼",
+  frac34: "¾",
+  gt: ">",
+  hellip: "…",
+  laquo: "«",
+  ldquo: "“",
+  lsquo: "‘",
+  lt: "<",
+  lsaquo: "‹",
+  mdash: "—",
+  micro: "µ",
+  middot: "·",
+  nbsp: " ",
+  ndash: "–",
+  para: "¶",
+  permil: "‰",
+  plusmn: "±",
+  pound: "£",
+  prime: "′",
+  Prime: "″",
+  quot: '"',
+  raquo: "»",
+  rdquo: "”",
+  reg: "®",
+  rlm: "\u200f",
+  rsaquo: "›",
+  rsquo: "’",
+  sect: "§",
+  shy: "",
+  sup2: "²",
+  sup3: "³",
+  thinsp: " ",
+  times: "×",
+  trade: "™",
+  yen: "¥",
+  zwnj: "\u200c",
+  zwj: "\u200d",
+};
+
+/**
+ * Decode the HTML entities that WordPress puts in `title.rendered`,
+ * `excerpt.rendered`, and Yoast metadata (for example `&#038;` for `&`).
+ *
+ * React escapes these strings when rendering, so without decoding the page
+ * shows the literal entity (`FieldLog &#038; Bin`) instead of the intended
+ * text (`FieldLog & Bin`). Numeric entities cover WordPress' default output;
+ * the named map handles common cases such as `&amp;` and `&nbsp;`.
+ */
+export function decodeHtmlEntities(value: string): string {
+  if (!value.includes("&")) return value;
+
+  return value.replace(
+    /&(?:#(\d+)|#x([0-9a-fA-F]+)|([a-zA-Z][a-zA-Z0-9]+));/g,
+    (match, decimal: string | undefined, hex: string | undefined, named: string) => {
+      if (decimal !== undefined || hex !== undefined) {
+        const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal ? 10 : 16);
+
+        if (
+          !Number.isFinite(codePoint) ||
+          codePoint <= 0 ||
+          codePoint > 0x10ffff ||
+          (codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ) {
+          return match;
+        }
+
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return match;
+        }
+      }
+
+      return NAMED_HTML_ENTITIES[named] ?? match;
+    },
+  );
+}
+
 export function stripHtmlTags(value: string): string {
-  return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return decodeHtmlEntities(value.replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function getPublicStorageUrl(
