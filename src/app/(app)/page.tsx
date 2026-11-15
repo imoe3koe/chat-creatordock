@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { MessageSquareText } from "lucide-react";
+import { getGreeting } from "@/lib/greeting";
 import { getCurrentProfile, getCurrentUser } from "@/lib/supabase/server";
 import { getFeedPosts, getSavedPostIds } from "@/modules/feed/queries";
 import { Feed } from "@/modules/feed/components/feed";
@@ -11,16 +13,6 @@ export const metadata: Metadata = {
   title: "Beranda",
   description: "Obrolan realtime komunitas kreator CreatorChat.",
 };
-
-function greeting(): string {
-  const hour = new Date().getHours();
-
-  if (hour < 12) return "Selamat pagi";
-  if (hour < 15) return "Selamat siang";
-  if (hour < 17) return "Selamat sore";
-  return "Selamat malam";
-}
-
 
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -35,12 +27,13 @@ export default async function HomePage() {
   ]);
 
   const firstName = profile.full_name?.split(" ")[0] || profile.username;
+  const timeZone = (await headers()).get("x-vercel-ip-timezone") ?? undefined;
 
   return (
     <div className="space-y-4">
       <header className="px-1 pt-1">
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">
-          {greeting()}, {firstName}
+          {getGreeting(new Date(), timeZone)}, {firstName}
         </p>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight sm:text-2xl">
